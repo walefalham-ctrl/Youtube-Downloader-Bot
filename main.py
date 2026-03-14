@@ -1,29 +1,14 @@
 import telebot
 import yt_dlp
 import os
-from flask import Flask
-from threading import Thread
 
-# --- إعدادات البوت ---
+# التوكن الخاص بك
 API_TOKEN = '8647831819:AAFo8_JxQXN5uMAdIlN458ja1bsL_G15q94'
 bot = telebot.TeleBot(API_TOKEN)
 
-# --- إعداد سيرفر وهمي لإرضاء Render ---
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "البوت شغال 24/7"
-
-def run_web():
-    # Render يعطينا المنفذ تلقائياً في متغير اسمه PORT
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
-
-# --- أوامر البوت ---
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, "أرسل رابط يوتيوب وسأقوم بتحميله بأعلى جودة.")
+    bot.reply_to(message, "أهلاً بك! أنا شغال الآن من السحاب 24/7. أرسل رابط يوتيوب.")
 
 @bot.message_handler(func=lambda message: 'youtube.com' in message.text or 'youtu.be' in message.text)
 def download_video(message):
@@ -38,12 +23,8 @@ def download_video(message):
             bot.send_video(message.chat.id, video)
         os.remove(filename)
     except Exception as e:
-        bot.reply_to(message, f"❌ خطأ: {e}")
+        bot.reply_to(message, f"❌ حدث خطأ: {e}")
 
-# --- تشغيل البوت والسيرفر معاً ---
 if __name__ == "__main__":
-    # تشغيل السيرفر الوهمي في خلفية الكود
-    t = Thread(target=run_web)
-    t.start()
-    print("🚀 البوت انطلق في السحاب...")
+    print("🚀 البوت انطلق بنجاح كـ Background Worker...")
     bot.polling(none_stop=True)
