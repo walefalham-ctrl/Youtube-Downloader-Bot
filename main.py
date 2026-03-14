@@ -39,3 +39,11 @@ def download_video(message):
 
 print("🚀 البوت شغال...")
 bot.polling(none_stop=True)
+
+# أضف هذا السطر قبل الأخير لفتح منفذ وهمي يرضي Render
+import os
+PORT = int(os.environ.get('PORT', 5000))
+
+print("🚀 البوت شغال...")
+# تشغيل البوت
+bot.polling(none_stop=True)
