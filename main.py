@@ -3,7 +3,7 @@ import yt_dlp
 import os
 
 # التوكن الخاص بك
-API_TOKEN = '8647831819:AAFo8_JxQXN5uMAdIlN458ja1bsL_G15q94'
+API_TOKEN = '8647831819:AAGyv_LwCIxKd9jT-ezeKmT2C6ni45TjV3c'
 bot = telebot.TeleBot(API_TOKEN)
 
 @bot.message_handler(commands=['start'])
