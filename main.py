@@ -1,45 +1,81 @@
 import telebot
 import yt_dlp
 import os
+import uuid
+import logging
+from dotenv import load_dotenv
 
-# التوكن الخاص بك
-API_TOKEN = '8647831819:AAGyv_LwCIxKd9jT-ezeKmT2C6ni45TjV3c'
-bot = telebot.TeleBot(API_TOKEN)
+load_dotenv()
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+API_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+if not API_TOKEN:
+    raise RuntimeError("⚠️ ضع توكن البوت في متغير البيئة TELEGRAM_BOT_TOKEN")
+
+bot = telebot.TeleBot(API_TOKEN, parse_mode='HTML')
+os.makedirs('downloads', exist_ok=True)
+MAX_SIZE = 50 * 1024 * 1024  # 50MB
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, "مرحباً محمد! أرسل رابط تيك توك أو يوتيوب (حتى المحجوب) وسأقوم بتحميله لك.")
+    bot.reply_to(message, "👋 مرحباً! أرسل رابط يوتيوب أو تيك توك وسأقوم بتحميله لك.\nاكتب /help للمزيد.")
 
-@bot.message_handler(func=lambda message: True)
-def handle_message(message):
-    url = message.text
-    chat_id = message.chat.id
+@bot.message_handler(commands=['help'])
+def help_cmd(message):
+    bot.reply_to(message, "📥 أرسل رابط فيديو من يوتيوب أو تيك توك.\n⚠️ الحد: 50 ميجابايت، جودة 720p كحد أقصى.")
+
+@bot.message_handler(func=lambda m: True)
+def handle_url(message):
+    url = message.text.strip()
+    if not any(domain in url for domain in ['youtube.com', 'youtu.be', 'tiktok.com']):
+        bot.reply_to(message, "❌ يرجى إرسال رابط صحيح من يوتيوب أو تيك توك.")
+        return
+
+    sent = bot.reply_to(message, "⏳ جاري التحميل...")
+    filename = None
     
-    if 'youtube.com' in url or 'youtu.be' in url or 'tiktok.com' in url:
-        sent_msg = bot.reply_to(message, "⏳ جاري المعالجة وتخطي الحظر الجغرافي... انتظر قليلاً.")
-        
+    try:
         ydl_opts = {
-            # اختيار أفضل جودة لا تزيد عن 720p لضمان سرعة الرفع وتجنب انهيار السيرفر
-            'format': 'best[height<=720][ext=mp4]/best',
-            'outtmpl': f'media_{chat_id}.%(ext)s',
-            'geo_bypass': True, # هذه الميزة لتخطي حظر المسلسلات في السعودية
-            'nocheckcertificate': True,
-            'quiet': True
+            'format': 'best[height<=720][ext=mp4]/best[height<=720]/best',
+            'outtmpl': f'downloads/{message.chat.id}_{uuid.uuid4()}.%(ext)s',
+            'geo_bypass': True,
+            'geo_bypass_country': 'US',
+            'noplaylist': True,
+            'socket_timeout': 30,
+            'retries': 3,
+            'quiet': True,
+            'no_warnings': True,
         }
-
-        try:
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                filename = ydl.prepare_filename(info)
-                
-            with open(filename, 'rb') as media:
-                bot.send_video(chat_id, media, caption="✅ تم التحميل بنجاح!")
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+        
+        if not filename or not os.path.exists(filename):
+            raise FileNotFoundError("لم يتم العثور على الملف بعد التحميل")
             
-            os.remove(filename)
-            bot.delete_message(chat_id, sent_msg.message_id)
-        except Exception as e:
-            bot.edit_message_text(f"❌ حدث خطأ: قد يكون الفيديو طويل جداً أو محمي بشكل صارم.", chat_id, sent_msg.message_id)
-    else:
-        bot.reply_to(message, "يرجى إرسال رابط صحيح من يوتيوب أو تيك توك.")
+        if os.path.getsize(filename) > MAX_SIZE:
+            bot.edit_message_text("❌ الملف أكبر من 50 ميجابايت. البوت لا يدعم الملفات الكبيرة.", 
+                                message.chat.id, sent.message_id)
+            return
 
-bot.polling(none_stop=True)
+        caption = f"✅ <b>{info.get('title', 'تم التحميل')}</b>"
+        with open(filename, 'rb') as f:
+            bot.send_video(message.chat.id, f, caption=caption, timeout=600)
+        
+        bot.delete_message(message.chat.id, sent.message_id)
+        
+    except Exception as e:
+        logging.exception("Error during download/send")
+        bot.edit_message_text(f"❌ حدث خطأ: {str(e)[:100]}", message.chat.id, sent.message_id)
+        
+    finally:
+        if filename and os.path.exists(filename):
+            try:
+                os.remove(filename)
+            except:
+                pass
+
+logging.info("🤖 البوت يعمل الآن...")
+bot.polling(none_stop=True, timeout=30)
+
